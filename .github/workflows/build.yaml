@@ -8,7 +8,7 @@ env:
 jobs:
     build_prepare:
         name: Prepare build
-        runs-on: ubuntu-22.04
+        runs-on: osx-arm64 # ubuntu-22.04 
         outputs:
             version: ${{ steps.python-version.outputs.value }}
             channel: ${{ steps.version.outputs.channel }}
@@ -49,7 +49,7 @@ jobs:
                   path: ./project-chip
             - name: Checkout submodules
               working-directory: ./project-chip
-              run: scripts/checkout_submodules.py --shallow --platform linux
+              run: scripts/checkout_submodules.py --shallow --platform darwin # --platform linux
             - name: Apply patches
               working-directory: ./project-chip
               run: |
@@ -73,8 +73,8 @@ jobs:
                 name: matter-sdk-${{ env.matter_sdk_ref }}
                 path: ./project-chip.tar.zst
 
-    build_linux_python_lib:
-        name: Build Python wheels for Linux (${{ matrix.arch.name }})
+    build_m1_python_lib:
+        name: Build Python wheels for Apple ARM (${{ matrix.arch.name }})
         needs: build_prepare
 
         strategy:
@@ -107,13 +107,16 @@ jobs:
               uses: actions/download-artifact@v3
               with:
                 name: matter-sdk-${{ env.matter_sdk_ref }}
+            - name: Set up Homebrew
+              id: set-up-homebrew
+              uses: Homebrew/actions/setup-homebrew@master
             - name: Extract Matter SDK from tar
               working-directory: ./
               run: |
                 mkdir -p project-chip
                 cd project-chip
-                apt update && apt install zstd
-                tar -xaf ../project-chip.tar.zst --use-compress-program=zstdmt .
+                # brew install zstd # apt update && apt install zstd
+                tar -xaf ../project-chip.tar.zst . # --use-compress-program=zstdmt .
                 git config --global --add safe.directory "*"
                 rm -rf out/
             - name: Bootstrap
@@ -129,7 +132,7 @@ jobs:
                                                   chip_minmdns_default_policy=\"libnl\" \
                                                   chip_python_version=\"${{ needs.build_prepare.outputs.version }}\"  \
                                                   chip_python_package_prefix=\"home-assistant-chip\" \
-                                                  chip_python_platform_tag=\"manylinux_2_31\" \
+                                                  chip_python_platform_tag=\"macos\" \ # \"manylinux_2_31\" \
                                                   chip_code_pre_generated_directory=\"$(pwd)/zzz_pregenerated\" \
                                                   "
                   scripts/run_in_build_env.sh "ninja -C ./out chip-repl"
@@ -144,30 +147,3 @@ jobs:
               with:
                 name: chip-wheels-${{ matrix.arch.name }}
                 path: project-chip/out/controller/python/*.whl
-            - name: Upload wheels as release assets
-              uses: softprops/action-gh-release@v1
-              if: startsWith(github.ref, 'refs/tags/')
-              with:
-                files: project-chip/out/controller/python/*.whl
-            - name: Upload wheels to PyPI
-              if: startsWith(github.ref, 'refs/tags/')
-              env:
-                  TWINE_USERNAME: "__token__"
-                  TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN_PYPI }}
-                  TWINE_REPOSITORY: "pypi"
-              run: |
-                  python3 -m pip install twine build
-                  python3 -m twine upload out/controller/python/home_assistant_chip_clusters-${{ needs.build_prepare.outputs.version }}-py3-none-any.whl --skip-existing
-                  python3 -m twine upload out/controller/python/home_assistant_chip_core-${{ needs.build_prepare.outputs.version }}-cp37-abi3-manylinux_2_31_${{ matrix.arch.name }}.whl --skip-existing
-                  python3 -m twine upload out/controller/python/home_assistant_chip_repl-${{ needs.build_prepare.outputs.version }}-py3-none-any.whl --skip-existing
-            - name: Upload wheels to Test PyPI
-              if: ${{ github.ref == 'refs/heads/main' }}
-              env:
-                  TWINE_USERNAME: "__token__"
-                  TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN_TESTPYPI }}
-                  TWINE_REPOSITORY: "testpypi"
-              run: |
-                  python3 -m pip install twine build
-                  python3 -m twine upload out/controller/python/home_assistant_chip_clusters-${{ needs.build_prepare.outputs.version }}-py3-none-any.whl --skip-existing
-                  python3 -m twine upload out/controller/python/home_assistant_chip_core-${{ needs.build_prepare.outputs.version }}-cp37-abi3-manylinux_2_31_${{ matrix.arch.name }}.whl --skip-existing
-                  python3 -m twine upload out/controller/python/home_assistant_chip_repl-${{ needs.build_prepare.outputs.version }}-py3-none-any.whl --skip-existing
