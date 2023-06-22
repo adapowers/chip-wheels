@@ -8,7 +8,7 @@ env:
 jobs:
     build_prepare:
         name: Prepare build
-        runs-on: osx-arm64 # ubuntu-22.04 
+        runs-on: macos-latest # ubuntu-22.04 
         outputs:
             version: ${{ steps.python-version.outputs.value }}
             channel: ${{ steps.version.outputs.channel }}
